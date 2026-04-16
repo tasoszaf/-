@@ -1,14 +1,9 @@
 {
-  "players": [
-    {
-      "name": "harry",
-      "role": "πολίτης"
-    }
-  ],
+  "players": [],
   "word": [
     "αυτοκίνητο",
     "μηχανή"
   ],
-  "index": 1,
-  "eliminated": "Ron"
+  "index": 0,
+  "eliminated": "harry"
 }
