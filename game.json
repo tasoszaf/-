@@ -1,0 +1,34 @@
+{
+  "players": [
+    {
+      "name": "Ron",
+      "role": "mr_white"
+    },
+    {
+      "name": "harry",
+      "role": "πολίτης"
+    },
+    {
+      "name": "tom",
+      "role": "undercover"
+    },
+    {
+      "name": "Hermione",
+      "role": "πολίτης"
+    },
+    {
+      "name": "morvolo",
+      "role": "πολίτης"
+    },
+    {
+      "name": "riddle",
+      "role": "πολίτης"
+    }
+  ],
+  "word": [
+    "αυτοκίνητο",
+    "μηχανή"
+  ],
+  "index": 0,
+  "eliminated": null
+}
