@@ -11,7 +11,7 @@ WORDS = [
     ("ψωμί", "τυρί"),
 ]
 
-# ================= INIT STATE =================
+# ================= INIT =================
 
 if "players" not in st.session_state:
     st.session_state.players = []
@@ -48,24 +48,30 @@ def assign_roles(players):
     return [{"name": players[i], "role": roles[i]} for i in range(len(players))]
 
 
-def check_winner(players):
+def check_winner(players, mr_white_alive):
+
     roles = [p["role"] for p in players]
 
     spies = roles.count("undercover")
     citizens = roles.count("πολίτης")
 
+    # 🟡 SPIES WIN
     if spies >= citizens:
         return "SPIES"
 
-    if spies == 0:
+    # 🟢 CITIZENS WIN
+    if spies == 0 and mr_white_alive:
         return "CITIZENS"
+
+    # ⚪ MR WHITE WIN (last man or condition)
+    if len(players) == 1 and players[0]["role"] == "mr_white":
+        return "MR_WHITE"
 
     return None
 
-
 # ================= UI =================
 
-st.title("🎭 Mr White (FINAL VERSION)")
+st.title("🎭 Mr White (FINAL FIXED VERSION)")
 
 # ================= SETUP =================
 
@@ -79,17 +85,19 @@ if st.session_state.phase == "setup":
 
     if st.button("▶ Start Game"):
         if len(st.session_state.players) >= 3:
+
             st.session_state.game = {
                 "players": assign_roles(st.session_state.players),
                 "word": random.choice(WORDS),
                 "index": 0
             }
+
             st.session_state.phase = "game"
             st.rerun()
 
     st.write("👥 Players:", st.session_state.players)
 
-# ================= GAME =================
+# ================= GAME LOOP =================
 
 else:
 
@@ -97,13 +105,13 @@ else:
     players = game["players"]
     word = game["word"]
 
-    # ---------------- REVEAL LOOP ----------------
+    # ---------------- REVEAL PHASE ----------------
 
     if st.session_state.index < len(players):
 
         p = players[st.session_state.index]
 
-        st.write(f"👉 Παίκτης: **{p['name']}**")
+        st.write(f"👉 **{p['name']}**")
 
         if st.button("👁 Reveal"):
 
@@ -141,27 +149,33 @@ else:
 
             st.rerun()
 
-    # ---------------- RESULT AFTER VOTE ----------------
+    # ---------------- RESULT PHASE ----------------
 
     if st.session_state.last_out:
 
         removed = st.session_state.last_out
 
-        st.error(f"❌ Βγήκε: {removed['name']}")
+        st.error(f"❌ Out: {removed['name']}")
         st.write(f"🎭 Ρόλος: **{removed['role']}**")
 
-        # CHECK WIN
-        winner = check_winner(game["players"])
+        mr_white_alive = any(p["role"] == "mr_white" for p in game["players"])
+
+        winner = check_winner(game["players"], mr_white_alive)
 
         if winner:
+
             st.session_state.finished = True
 
             if winner == "SPIES":
                 st.session_state.winner = "🟡 ΚΑΤΑΣΚΟΠΟΙ"
-            else:
+
+            elif winner == "CITIZENS":
                 st.session_state.winner = "🟢 ΠΟΛΙΤΕΣ"
 
-        # ---------------- GAME CONTROLS ----------------
+            elif winner == "MR_WHITE":
+                st.session_state.winner = "⚪ MR WHITE"
+
+        # ---------------- END SCREEN ----------------
 
         if st.session_state.finished:
 
@@ -183,14 +197,18 @@ else:
                     st.rerun()
 
             with col2:
-                if st.button("🏁 End Game Now"):
+                if st.button("🏁 End Game"):
 
-                    winner = check_winner(game["players"])
+                    mr_white_alive = any(p["role"] == "mr_white" for p in game["players"])
+                    winner = check_winner(game["players"], mr_white_alive)
+
+                    st.session_state.finished = True
 
                     if winner == "SPIES":
                         st.session_state.winner = "🟡 ΚΑΤΑΣΚΟΠΟΙ"
-                    else:
+                    elif winner == "CITIZENS":
                         st.session_state.winner = "🟢 ΠΟΛΙΤΕΣ"
+                    else:
+                        st.session_state.winner = "⚪ MR WHITE"
 
-                    st.session_state.finished = True
                     st.rerun()
