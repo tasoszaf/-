@@ -1,15 +1,5 @@
 import streamlit as st
 import random
-import json
-import base64
-import requests
-
-# ================= CONFIG =================
-
-REPO = "tasoszaf/mr.white"
-FILE_PATH = "game.json"
-
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 # ================= WORDS =================
 
@@ -18,79 +8,10 @@ WORDS = [
     ("θάλασσα", "λίμνη"),
     ("αυτοκίνητο", "μηχανή"),
     ("πόλη", "χωριό"),
+    ("ψωμί", "τυρί"),
 ]
 
-# ================= GITHUB SAVE =================
-
-def save_to_github(data):
-
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-
-    content = json.dumps(data, ensure_ascii=False, indent=2)
-    encoded = base64.b64encode(content.encode()).decode()
-
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
-
-    r = requests.get(url, headers=headers)
-    sha = r.json().get("sha") if r.status_code == 200 else None
-
-    payload = {
-        "message": "update game",
-        "content": encoded
-    }
-
-    if sha:
-        payload["sha"] = sha
-
-    requests.put(url, headers=headers, json=payload)
-
-# ================= GAME CORE =================
-
-def assign_roles(players):
-    roles = ["mr_white", "undercover"]
-
-    while len(roles) < len(players):
-        roles.append("πολίτης")
-
-    random.shuffle(players)
-    random.shuffle(roles)
-
-    return [{"name": players[i], "role": roles[i]} for i in range(len(players))]
-
-
-def count_roles(players):
-    spies = sum(1 for p in players if p["role"] == "undercover")
-    citizens = sum(1 for p in players if p["role"] == "πολίτης")
-    mr_white = any(p["role"] == "mr_white" for p in players)
-
-    return spies, citizens, mr_white
-
-
-def check_winner(players, mr_white_alive, guessed):
-
-    spies, citizens, _ = count_roles(players)
-
-    # ⚪ MR WHITE WIN
-    if guessed:
-        return "MR_WHITE_WINS"
-
-    if mr_white_alive and spies == 0:
-        return "MR_WHITE_WINS"
-
-    # 🟡 SPIES WIN (ισοφαρία ή υπεροχή)
-    if spies >= citizens:
-        return "SPIES_WIN"
-
-    # 🟢 CITIZENS WIN
-    if spies == 0 and mr_white_alive:
-        return "CITIZENS_WIN"
-
-    return None
-
-# ================= INIT =================
+# ================= INIT STATE =================
 
 if "players" not in st.session_state:
     st.session_state.players = []
@@ -104,15 +25,47 @@ if "phase" not in st.session_state:
 if "index" not in st.session_state:
     st.session_state.index = 0
 
-if "eliminated" not in st.session_state:
-    st.session_state.eliminated = None
+if "last_out" not in st.session_state:
+    st.session_state.last_out = None
 
-if "guess_result" not in st.session_state:
-    st.session_state.guess_result = False
+if "finished" not in st.session_state:
+    st.session_state.finished = False
+
+if "winner" not in st.session_state:
+    st.session_state.winner = None
+
+# ================= LOGIC =================
+
+def assign_roles(players):
+    roles = ["mr_white", "undercover"]
+
+    while len(roles) < len(players):
+        roles.append("πολίτης")
+
+    random.shuffle(players)
+    random.shuffle(roles)
+
+    return [{"name": players[i], "role": roles[i]} for i in range(len(players))]
+
+
+def check_winner(players):
+    roles = [p["role"] for p in players]
+
+    spies = roles.count("undercover")
+    citizens = roles.count("πολίτης")
+
+    if spies >= citizens:
+        return "SPIES"
+
+    if spies == 0:
+        return "CITIZENS"
+
+    return None
+
 
 # ================= UI =================
 
-st.title("🎭 Mr White (RULE CORRECT VERSION)")
+st.title("🎭 Mr White (FINAL VERSION)")
 
 # ================= SETUP =================
 
@@ -131,11 +84,7 @@ if st.session_state.phase == "setup":
                 "word": random.choice(WORDS),
                 "index": 0
             }
-
             st.session_state.phase = "game"
-            st.session_state.index = 0
-
-            save_to_github(st.session_state.game)
             st.rerun()
 
     st.write("👥 Players:", st.session_state.players)
@@ -154,7 +103,7 @@ else:
 
         p = players[st.session_state.index]
 
-        st.write("👉", p["name"])
+        st.write(f"👉 Παίκτης: **{p['name']}**")
 
         if st.button("👁 Reveal"):
 
@@ -169,79 +118,79 @@ else:
             st.session_state.index += 1
             st.rerun()
 
-    # ---------------- ELIMINATION ----------------
+    # ---------------- VOTE PHASE ----------------
 
     else:
 
-        st.subheader("❌ Elimination")
+        st.subheader("❌ Vote Phase")
 
         names = [p["name"] for p in players]
 
-        idx = st.selectbox("Pick player", range(len(names)), format_func=lambda i: names[i])
+        idx = st.selectbox("Ποιος φεύγει;", range(len(names)), format_func=lambda i: names[i])
 
-        if st.button("🔥 Confirm"):
+        if st.button("🔥 Vote Out"):
 
-            eliminated = names[idx]
-            st.session_state.eliminated = eliminated
+            removed = players[idx]
+            st.session_state.last_out = removed
 
-            players = [p for p in players if p["name"] != eliminated]
+            # remove player
+            players = [p for p in players if p["name"] != removed["name"]]
             game["players"] = players
 
             st.session_state.index = 0
 
-            save_to_github(game)
             st.rerun()
 
-    # ---------------- RESOLUTION ----------------
+    # ---------------- RESULT AFTER VOTE ----------------
 
-    if st.session_state.eliminated:
+    if st.session_state.last_out:
 
-        st.error(f"❌ Out: {st.session_state.eliminated}")
+        removed = st.session_state.last_out
 
-        roles = [p["role"] for p in game["players"]]
-        mr_white_alive = any(p["role"] == "mr_white" for p in game["players"])
+        st.error(f"❌ Βγήκε: {removed['name']}")
+        st.write(f"🎭 Ρόλος: **{removed['role']}**")
 
-        # MR WHITE GUESS PHASE
-        if any(p["role"] == "mr_white" and p["name"] == st.session_state.eliminated for p in players) == False:
+        # CHECK WIN
+        winner = check_winner(game["players"])
 
-            pass
+        if winner:
+            st.session_state.finished = True
 
-        # guess UI only if mr white is eliminated
-        eliminated_player = st.session_state.eliminated
-        eliminated_role = None
+            if winner == "SPIES":
+                st.session_state.winner = "🟡 ΚΑΤΑΣΚΟΠΟΙ"
+            else:
+                st.session_state.winner = "🟢 ΠΟΛΙΤΕΣ"
 
-        for p in players:
-            if p["name"] == eliminated_player:
-                eliminated_role = p["role"]
+        # ---------------- GAME CONTROLS ----------------
 
-        if eliminated_role == "mr_white":
+        if st.session_state.finished:
 
-            guess = st.text_input("🎯 Mr White μάντεψε λέξη:")
+            st.success(f"🏁 ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ → ΝΙΚΗΤΕΣ: {st.session_state.winner}")
 
-            if st.button("✔ Check Guess"):
+            if st.button("🔁 Play Again"):
+                st.session_state.clear()
+                st.rerun()
 
-                if guess.lower() in [word[0].lower(), word[1].lower()]:
-                    st.success("🏆 MR WHITE WINS")
-                    save_to_github(game)
-                    st.stop()
+        else:
 
-                else:
-                    st.error("❌ Wrong guess")
+            st.info("🎮 Το παιχνίδι συνεχίζεται")
 
-        result = check_winner(players, mr_white_alive, st.session_state.guess_result)
+            col1, col2 = st.columns(2)
 
-        if result == "MR_WHITE_WINS":
-            st.success("🏆 MR WHITE WINS")
-            st.stop()
+            with col1:
+                if st.button("🔁 Vote Again"):
+                    st.session_state.last_out = None
+                    st.rerun()
 
-        elif result == "SPIES_WIN":
-            st.success("🟡 SPIES WIN")
-            st.stop()
+            with col2:
+                if st.button("🏁 End Game Now"):
 
-        elif result == "CITIZENS_WIN":
-            st.success("🟢 CITIZENS WIN")
-            st.stop()
+                    winner = check_winner(game["players"])
 
-        if st.button("➡ Next Round"):
-            st.session_state.eliminated = None
-            st.rerun()
+                    if winner == "SPIES":
+                        st.session_state.winner = "🟡 ΚΑΤΑΣΚΟΠΟΙ"
+                    else:
+                        st.session_state.winner = "🟢 ΠΟΛΙΤΕΣ"
+
+                    st.session_state.finished = True
+                    st.rerun()
