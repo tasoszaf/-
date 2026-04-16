@@ -1,19 +1,19 @@
 {
   "players": [
     {
-      "name": "cxvx",
+      "name": "φαφασφ",
+      "role": "mr_white"
+    },
+    {
+      "name": "δασδαφαφα",
+      "role": "πολίτης"
+    },
+    {
+      "name": "φασφαφ",
       "role": "undercover"
     },
     {
-      "name": "khjklh",
-      "role": "πολίτης"
-    },
-    {
-      "name": "khjkhjk",
-      "role": "πολίτης"
-    },
-    {
-      "name": "vzvzv",
+      "name": "δασδα",
       "role": "πολίτης"
     }
   ],
