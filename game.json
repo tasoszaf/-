@@ -9,10 +9,6 @@
       "role": "πολίτης"
     },
     {
-      "name": "Hermione",
-      "role": "πολίτης"
-    },
-    {
       "name": "morvolo",
       "role": "πολίτης"
     },
@@ -25,6 +21,6 @@
     "αυτοκίνητο",
     "μηχανή"
   ],
-  "index": 5,
-  "eliminated": "tom"
+  "index": 0,
+  "eliminated": "Hermione"
 }
