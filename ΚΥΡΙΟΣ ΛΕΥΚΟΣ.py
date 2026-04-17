@@ -1,5 +1,12 @@
 import streamlit as st
 import random
+import json
+import os
+
+# ================= FILES =================
+
+PLAYERS_FILE = "players.json"
+GAME_FILE = "game.json"
 
 # ================= WORDS =================
 
@@ -11,13 +18,35 @@ WORDS = [
     ("ψωμί", "τυρί"),
 ]
 
+# ================= LOAD / SAVE =================
+
+def save_players(players):
+    with open(PLAYERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(players, f, ensure_ascii=False)
+
+def load_players():
+    if os.path.exists(PLAYERS_FILE):
+        with open(PLAYERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_game(game_state):
+    with open(GAME_FILE, "w", encoding="utf-8") as f:
+        json.dump(game_state, f, ensure_ascii=False)
+
+def load_game():
+    if os.path.exists(GAME_FILE):
+        with open(GAME_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
 # ================= INIT STATE =================
 
 if "players" not in st.session_state:
-    st.session_state.players = []
+    st.session_state.players = load_players()
 
 if "game" not in st.session_state:
-    st.session_state.game = None
+    st.session_state.game = load_game()
 
 if "revealed" not in st.session_state:
     st.session_state.revealed = {}
@@ -52,8 +81,7 @@ def assign_roles(players):
 
 # ================= WIN LOGIC =================
 
-def check_winner(players, mr_white_guessed=False):
-
+def check_winner(players):
     roles = [p["role"] for p in players]
 
     civilians = roles.count("πολίτης")
@@ -62,15 +90,9 @@ def check_winner(players, mr_white_guessed=False):
 
     infiltrators = undercovers + mr_whites
 
-    # ⚪ MR WHITE WINS (guess)
-    if mr_white_guessed:
-        return "MR_WHITE"
-
-    # 🟡 INFILTRATORS WIN
     if civilians <= 1 and infiltrators > 0:
         return "INFILTRATORS"
 
-    # 🟢 CIVILIANS WIN
     if undercovers == 0 and mr_whites == 0:
         return "CIVILIANS"
 
@@ -78,36 +100,52 @@ def check_winner(players, mr_white_guessed=False):
 
 # ================= UI =================
 
-st.title("🎭 Mr White (FULL RULE ENGINE)")
+st.title("🎭 Mr White (Persistent Version)")
 
 # ================= SETUP =================
 
 if st.session_state.game is None:
 
-    name = st.text_input("👤 Παίκτης")
+    st.subheader("➕ Players Setup")
 
-    if st.button("➕ Add"):
-        if name and name not in st.session_state.players:
-            st.session_state.players.append(name)
+    new_name = st.text_input("👤 Νέος παίκτης")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("➕ Add Player"):
+            if new_name and new_name not in st.session_state.players:
+                st.session_state.players.append(new_name)
+                save_players(st.session_state.players)
+                st.rerun()
+
+    with col2:
+        if st.button("🗑 Clear Players"):
+            st.session_state.players = []
+            save_players([])
+            st.rerun()
+
+    st.write("📋 Saved Players:")
+    st.write(st.session_state.players)
 
     if st.button("▶ Start Game"):
+
         if len(st.session_state.players) >= 3:
 
             st.session_state.game = {
-                "players": assign_roles(st.session_state.players),
+                "players": assign_roles(st.session_state.players.copy()),
                 "word": random.choice(WORDS),
             }
 
             for p in st.session_state.game["players"]:
                 st.session_state.revealed[p["name"]] = False
 
+            save_game(st.session_state.game)
             st.rerun()
 
-    st.write("👥 Players:", st.session_state.players)
+# ================= RESTORE GAME =================
 
-# ================= GAME =================
-
-else:
+elif st.session_state.game is not None:
 
     game = st.session_state.game
     players = game["players"]
@@ -116,8 +154,6 @@ else:
     st.subheader("🎴 Cards")
 
     cols = st.columns(3)
-
-    # ================= CARDS =================
 
     for i, p in enumerate(players):
 
@@ -140,7 +176,6 @@ else:
                     st.rerun()
 
             else:
-
                 st.info("🔒 Hidden")
 
                 if st.button("👁 Reveal", key=f"reveal{i}"):
@@ -164,10 +199,10 @@ else:
         players = [p for p in players if p["name"] != removed["name"]]
         game["players"] = players
 
-        # reset reveal
-        st.session_state.revealed[removed["name"]] = False
+        st.session_state.revealed.pop(removed["name"], None)
 
-        # MR WHITE TRIGGERS GUESS MODE
+        save_game(game)
+
         if removed["role"] == "mr_white":
             st.session_state.mr_white_guess_mode = True
 
@@ -200,12 +235,9 @@ else:
         st.error(f"❌ Out: {removed['name']}")
         st.write(f"🎭 Role: **{removed['role']}**")
 
-        winner = check_winner(
-            game["players"],
-            st.session_state.mr_white_won
-        )
+        winner = check_winner(game["players"])
 
-        if winner == "MR_WHITE":
+        if st.session_state.mr_white_won:
             st.session_state.finished = True
             st.session_state.winner = "⚪ MR WHITE"
 
@@ -217,14 +249,16 @@ else:
             st.session_state.finished = True
             st.session_state.winner = "🟢 CIVILIANS"
 
-        # ================= END SCREEN =================
+        # ================= END =================
 
         if st.session_state.finished:
 
-            st.success(f"🏁 GAME OVER → WINNER: {st.session_state.winner}")
+            st.success(f"🏁 GAME OVER → {st.session_state.winner}")
 
             if st.button("🔁 Restart Game"):
                 st.session_state.clear()
+                if os.path.exists(GAME_FILE):
+                    os.remove(GAME_FILE)
                 st.rerun()
 
         else:
@@ -239,19 +273,6 @@ else:
                     st.rerun()
 
             with col2:
-                if st.button("🏁 End Game Now"):
-
-                    winner = check_winner(
-                        game["players"],
-                        st.session_state.mr_white_won
-                    )
-
-                    if winner == "MR_WHITE":
-                        st.session_state.winner = "⚪ MR WHITE"
-                    elif winner == "INFILTRATORS":
-                        st.session_state.winner = "🟡 INFILTRATORS"
-                    else:
-                        st.session_state.winner = "🟢 CIVILIANS"
-
+                if st.button("🏁 End Game"):
                     st.session_state.finished = True
                     st.rerun()
