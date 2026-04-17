@@ -5,7 +5,7 @@ import os
 
 # ================= FILE =================
 
-PLAYERS_FILE = "players.json"
+PLAYERS_FILE = "players.json"c
 
 def load_players():
     if os.path.exists(PLAYERS_FILE):
